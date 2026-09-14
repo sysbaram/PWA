@@ -54,7 +54,7 @@
 
 중요: Apps Script 웹 앱 자체는 인터넷에서 호출 가능하므로 긴 접근 키를 반드시 사용하고 공유하지 마세요. 접근 키는 시트에 저장되지 않으며 현재 브라우저 기기에만 저장됩니다. 고객 개인정보가 민감하거나 여러 직원의 개별 권한·접속 차단·감사 로그가 필요하면 Google 로그인 기반 서버 또는 Supabase 같은 인증형 백엔드로 전환하는 것이 좋습니다.
 
-## 프론트엔드 실행과 배포
+## 프론트엔드 실행
 
 Node.js 22 이상이 필요합니다.
 
@@ -63,13 +63,32 @@ npm install
 npm run dev
 ```
 
-정적 웹 호스팅에 올리기 전에는 다음으로 배포 빌드를 확인합니다.
+배포용 정적 파일은 다음 명령으로 `dist` 폴더에 생성됩니다.
 
 ```bash
 npm run build
 ```
 
-Cloudflare Pages, OpenAI Sites 또는 호환되는 정적/Workers 호스팅에 배포할 수 있습니다. 앱을 연 뒤 모바일 브라우저 메뉴의 `홈 화면에 추가`를 사용하면 PWA처럼 실행됩니다.
+## GitHub Pages 배포
+
+프로젝트에는 `.github/workflows/deploy-pages.yml`이 포함되어 있습니다. 저장소의 `main` 브랜치에 올리면 GitHub Actions가 자동으로 설치, 빌드, 배포합니다.
+
+1. GitHub에서 빈 저장소를 만듭니다. 예: `credit-ledger`.
+2. 이 폴더의 파일 전체를 저장소 `main` 브랜치에 올립니다. `node_modules`와 `dist`는 올리지 않습니다.
+3. GitHub 저장소에서 `Settings → Pages`로 이동합니다.
+4. `Build and deployment → Source`를 `GitHub Actions`로 선택합니다.
+5. 저장소의 `Actions` 탭에서 `Deploy to GitHub Pages` 작업이 성공했는지 확인합니다.
+6. 완료 후 표시되는 `https://사용자명.github.io/저장소명/` 주소로 접속합니다.
+
+프로젝트 사이트와 사용자 사이트 모두에서 동작하도록 Vite의 자산 경로, PWA 시작 주소, 아이콘 경로를 상대 경로로 설정했습니다. 별도의 저장소 이름 수정은 필요하지 않습니다.
+
+이후 수정 사항을 `main`에 push하면 같은 작업이 자동으로 재배포합니다. 앱을 연 뒤 모바일 브라우저 메뉴의 `홈 화면에 추가`를 사용하면 PWA처럼 실행됩니다.
+
+```bash
+git add .
+git commit -m "외상노트 업데이트"
+git push origin main
+```
 
 ## 데이터 보호 권장사항
 

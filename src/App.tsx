@@ -1,11 +1,18 @@
-'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type InputHTMLAttributes } from 'react';
 import { ArrowDownLeft, ArrowUpRight, BookOpenText, CalendarClock, ChevronRight, CircleDollarSign, Clock3, Plus, Search, Settings2, Users, WalletCards, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 
 type Customer = { id: string; name: string; phone: string; balance: number; oldestDate: string | null };
 type Transaction = { id: string; customerId: string; customerName: string; type: 'credit' | 'payment'; amount: number; date: string; memo: string };
+
+type AppButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'outline' | 'ghost'; size?: 'default' | 'lg' | 'icon' | 'icon-lg' };
+function Button({ variant = 'default', size = 'default', className = '', ...props }: AppButtonProps) {
+  const variantClass = variant === 'outline' ? 'border border-border bg-background hover:bg-secondary' : variant === 'ghost' ? 'bg-transparent hover:bg-secondary' : 'bg-primary text-primary-foreground hover:opacity-90';
+  const sizeClass = size === 'lg' ? 'h-10 px-4' : size === 'icon' ? 'size-9' : size === 'icon-lg' ? 'size-10' : 'h-9 px-3';
+  return <button className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 ${variantClass} ${sizeClass} ${className}`} {...props} />;
+}
+function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return <input className={`w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-3 focus:ring-ring/25 ${className}`} {...props} />;
+}
 
 const sampleCustomers: Customer[] = [
   { id: 'C001', name: '김민수', phone: '010-2468-1357', balance: 485000, oldestDate: '2026-07-03' },

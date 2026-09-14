@@ -1,1 +1,1 @@
-{"name":"외상노트","short_name":"외상노트","description":"고객 외상값과 입금을 간편하게 관리합니다.","start_url":"/","display":"standalone","background_color":"#f6f5f0","theme_color":"#1e584b","icons":[{"src":"/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
+{"name":"외상노트","short_name":"외상노트","description":"고객 외상값과 입금을 간편하게 관리합니다.","start_url":"./","scope":"./","display":"standalone","background_color":"#f6f5f0","theme_color":"#1e584b","icons":[{"src":"./favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
