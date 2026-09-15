@@ -68,7 +68,7 @@ function authorize(candidate) {
 function addCustomer(data) {
   const name = clean(data.name);
   if (!name) throw new Error('고객명을 입력해 주세요.');
-  const record = { id: makeId('C'), name, phone: clean(data.phone), memo: clean(data.memo), created_at: createdAtSeoulDate() };
+  const record = { id: makeId('C'), name, phone: clean(data.phone), memo: clean(data.memo), created_at: createdAtSeoulTime() };
   SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CUSTOMER_SHEET).appendRow([record.id, record.name, record.phone, record.memo, record.created_at]);
   return record;
 }
@@ -80,7 +80,7 @@ function addTransaction(data) {
   const date = clean(data.date);
   if (!customerId || !Number.isFinite(amount) || amount <= 0 || !date) throw new Error('고객, 금액, 거래일을 확인해 주세요.');
   if (!readRows(CUSTOMER_SHEET).some(row => String(row.customer_id) === customerId)) throw new Error('고객을 찾을 수 없습니다.');
-  const record = { transaction_id: makeId('T'), customer_id: customerId, type, amount, date, memo: clean(data.memo), created_at: createdAtSeoulDate() };
+  const record = { transaction_id: makeId('T'), customer_id: customerId, type, amount, date, memo: clean(data.memo), created_at: createdAtSeoulTime() };
   SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TRANSACTION_SHEET).appendRow([record.transaction_id, record.customer_id, record.type, record.amount, record.date, record.memo, record.created_at]);
   writeAudit('transaction', 'create', record.transaction_id, customerId, record);
   return record;
@@ -98,7 +98,7 @@ function addCylinderRental(data) {
     const rented = readRows(CYLINDER_RENTAL_SHEET).filter(row => String(row.customer_id) === customerId && String(row.cylinder_type) === cylinderType).reduce((sum, row) => sum + (row.type === 'return' ? -Number(row.quantity || 0) : Number(row.quantity || 0)), 0);
     if (quantity > rented) throw new Error('해당 규격의 현재 대여 수량보다 많이 반납할 수 없습니다.');
   }
-  const record = { rental_id: makeId('R'), customer_id: customerId, type, quantity, cylinder_type: cylinderType, date, memo: clean(data.memo), created_at: createdAtSeoulDate() };
+  const record = { rental_id: makeId('R'), customer_id: customerId, type, quantity, cylinder_type: cylinderType, date, memo: clean(data.memo), created_at: createdAtSeoulTime() };
   SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CYLINDER_RENTAL_SHEET).appendRow([record.rental_id, record.customer_id, record.type, record.quantity, record.cylinder_type, record.date, record.memo, record.created_at]);
   writeAudit('cylinderRental', 'create', record.rental_id, customerId, record);
   return record;
@@ -125,10 +125,10 @@ function deleteCylinderRental(id) {
 }
 
 function writeAudit(entity, action, recordId, customerId, snapshot) {
-  SpreadsheetApp.getActiveSpreadsheet().getSheetByName(AUDIT_SHEET).appendRow([makeId('L'), entity, action, recordId, customerId, JSON.stringify(snapshot), createdAtSeoulDate()]);
+  SpreadsheetApp.getActiveSpreadsheet().getSheetByName(AUDIT_SHEET).appendRow([makeId('L'), entity, action, recordId, customerId, JSON.stringify(snapshot), createdAtSeoulTime()]);
 }
 
-// 기존 created_at 값도 서울 날짜(YYYY-MM-DD)로 일괄 변환할 때 한 번 실행합니다.
+// 기존 created_at 값도 서울 시간(YYYY-MM-DD HH:mm:ss)으로 일괄 변환할 때 한 번 실행합니다.
 function normalizeCreatedAtDates() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   [CUSTOMER_SHEET, TRANSACTION_SHEET, CYLINDER_RENTAL_SHEET, AUDIT_SHEET].forEach(sheetName => {
@@ -140,8 +140,9 @@ function normalizeCreatedAtDates() {
     const range = sheet.getRange(2, column, sheet.getLastRow() - 1, 1);
     const converted = range.getValues().map(([value]) => {
       if (!value) return [''];
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return [value.trim() + ' 00:00:00'];
       const date = value instanceof Date ? value : new Date(value);
-      return [Number.isNaN(date.getTime()) ? String(value) : Utilities.formatDate(date, 'Asia/Seoul', 'yyyy-MM-dd')];
+      return [Number.isNaN(date.getTime()) ? String(value) : Utilities.formatDate(date, 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss')];
     });
     range.setNumberFormat('@').setValues(converted);
   });
@@ -176,7 +177,7 @@ function readRows(sheetName) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues();
-  const headers = values.shift();
+  const headers = values.shift().map(key => String(key).trim());
   return values.filter(row => row.some(cell => cell !== '')).map(row => headers.reduce((obj, key, index) => { obj[key] = row[index]; return obj; }, {}));
 }
 
@@ -184,12 +185,17 @@ function readRowsWithNumbers(sheetName) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (!sheet || sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues();
-  const headers = values.shift();
+  const headers = values.shift().map(key => String(key).trim());
   return values.map((row, index) => ({ rowNumber: index + 2, data: headers.reduce((obj, key, column) => { obj[key] = row[column]; return obj; }, {}) })).filter(item => Object.values(item.data).some(value => value !== ''));
 }
 
 function clean(value) { return String(value == null ? '' : value).trim().slice(0, 500); }
 function makeId(prefix) { return prefix + Utilities.getUuid().replace(/-/g, '').slice(0, 12); }
-function createdAtSeoulDate() { return Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd'); }
-function normalizeDate(value) { return Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), 'yyyy-MM-dd'); }
+function createdAtSeoulTime() { return Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss'); }
+function normalizeDate(value) {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return clean(value).slice(0, 10);
+  return Utilities.formatDate(date, 'Asia/Seoul', 'yyyy-MM-dd');
+}
 function jsonOutput(data) { return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON); }

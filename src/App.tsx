@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type InputHTMLAttributes } from 'react';
-import { ArrowDownLeft, ArrowUpRight, BookOpenText, CalendarClock, ChevronRight, CircleDollarSign, Clock3, Plus, Search, Settings2, Trash2, Users, WalletCards, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, BookOpenText, CalendarClock, ChevronRight, CircleDollarSign, Clock3, Plus, RefreshCw, Search, Settings2, Trash2, Users, WalletCards, X } from 'lucide-react';
 
 type Customer = { id: string; name: string; phone: string; memo: string; balance: number; oldestDate: string | null; cylinderCount: number };
 type Transaction = { id: string; customerId: string; customerName: string; type: 'credit' | 'payment'; amount: number; date: string; memo: string };
@@ -57,6 +57,7 @@ export default function Home() {
   const [apiUrl, setApiUrl] = useState('');
   const [accessKey, setAccessKey] = useState('');
   const [connected, setConnected] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const receivables = customers.filter((c) => c.balance > 0);
   const total = receivables.reduce((sum, c) => sum + c.balance, 0);
   const totalCylinders = customers.reduce((sum, customer) => sum + customer.cylinderCount, 0);
@@ -87,10 +88,7 @@ export default function Home() {
     const savedKey = localStorage.getItem('credit-ledger-access-key') || '';
     setApiUrl(savedUrl); setAccessKey(savedKey);
     if (!savedUrl || !savedKey) return;
-    fetch(`${savedUrl}?action=summary&key=${encodeURIComponent(savedKey)}&t=${Date.now()}`).then((response) => response.json()).then((data) => {
-      if (!data.ok) throw new Error(data.error || '연결 오류');
-      applySummary(data);
-    }).catch(() => notify('Google Sheets 연결에 실패해 예시 데이터를 표시합니다.'));
+    refreshSummary(savedUrl, savedKey, false);
   }, []);
 
   function notify(message: string) { setToast(message); window.setTimeout(() => setToast(''), 2400); }
@@ -100,13 +98,27 @@ export default function Home() {
     setSelected((current) => current ? normalizedCustomers.find((customer) => customer.id === current.id) || current : null);
     setTransactions(data.transactions); setCylinderRentals(data.cylinderRentals || []); setConnected(true);
   }
+  async function refreshSummary(url = apiUrl, key = accessKey, announce = true) {
+    if (!url || !key) { if (announce) notify('먼저 Google Sheets 연결 정보를 저장해 주세요.'); return null; }
+    setRefreshing(true);
+    try {
+      const response = await fetch(`${url}?action=summary&key=${encodeURIComponent(key)}&t=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json(); if (!result.ok) throw new Error(result.error || '조회 오류');
+      applySummary(result); if (announce) notify(`시트에서 거래내역 ${result.transactions.length}건을 불러왔습니다.`); return result;
+    } catch (error) {
+      notify(`조회 실패: ${error instanceof Error ? error.message : '연결을 확인해 주세요.'}`); return null;
+    } finally { setRefreshing(false); }
+  }
   async function persist(action: string, payload: Record<string, FormDataEntryValue | string>) {
     if (!apiUrl || !accessKey) return null;
     try {
       const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, key: accessKey, ...payload }) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json(); if (!result.ok) throw new Error(result.error || 'Apps Script 저장 오류');
-      applySummary(result); return result;
+      const latest = await refreshSummary(apiUrl, accessKey, false);
+      const merged = latest ? { ...latest, actionResult: result.actionResult } : result;
+      applySummary(merged); return merged;
     } catch (error) {
       notify(`저장 실패: ${error instanceof Error ? error.message : '연결을 확인해 주세요.'}`); return false;
     }
@@ -178,7 +190,7 @@ export default function Home() {
   function openCylinder(type: 'rental' | 'return', customer: Customer) { setSelected(customer); setDialog(type); }
 
   return <main className="min-h-screen bg-background pb-28 text-foreground">
-    <header className="sticky top-0 z-20 border-b border-border/70 bg-background/92 backdrop-blur-xl"><div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6"><button onClick={() => setActiveTab('home')} className="flex items-center gap-2.5" aria-label="홈으로 이동"><span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground"><BookOpenText className="size-5" /></span><span className="text-left"><strong className="block text-[15px] leading-4 tracking-tight">외상노트</strong><span className="text-[11px] text-muted-foreground">받을 돈, 한눈에</span></span></button><div className="flex items-center gap-2">{connected && <span className="hidden items-center gap-1.5 text-[11px] font-semibold text-payment sm:flex"><i className="size-1.5 rounded-full bg-payment" />Sheets 연결됨</span>}<Button variant="outline" size="icon-lg" onClick={() => setDialog('settings')} aria-label="연결 설정"><Settings2 /></Button></div></div></header>
+    <header className="sticky top-0 z-20 border-b border-border/70 bg-background/92 backdrop-blur-xl"><div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6"><button onClick={() => setActiveTab('home')} className="flex items-center gap-2.5" aria-label="홈으로 이동"><span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground"><BookOpenText className="size-5" /></span><span className="text-left"><strong className="block text-[15px] leading-4 tracking-tight">외상노트</strong><span className="text-[11px] text-muted-foreground">받을 돈, 한눈에</span></span></button><div className="flex items-center gap-2">{connected && <span className="hidden items-center gap-1.5 text-[11px] font-semibold text-payment sm:flex"><i className="size-1.5 rounded-full bg-payment" />Sheets 연결됨</span>}<Button variant="outline" size="icon-lg" disabled={refreshing} onClick={() => refreshSummary()} aria-label="시트 데이터 새로고침"><RefreshCw className={refreshing ? 'animate-spin' : ''} /></Button><Button variant="outline" size="icon-lg" onClick={() => setDialog('settings')} aria-label="연결 설정"><Settings2 /></Button></div></div></header>
     <div className="mx-auto max-w-6xl px-4 pt-5 sm:px-6 sm:pt-8">
       <section className="balance-card overflow-hidden rounded-[26px] p-5 text-white shadow-[0_18px_50px_rgba(26,64,55,.2)] sm:p-7"><div className="flex items-start justify-between"><div><p className="text-sm text-white/70">전체 받을 금액</p><p className="mt-2 text-[32px] font-bold tracking-[-.04em] sm:text-4xl">{money(total)}</p></div><span className="rounded-full bg-white/12 px-3 py-1.5 text-xs font-medium text-white/80">{receivables.length}명 미수</span></div><div className="mt-7 grid gap-2 border-t border-white/15 pt-4 text-sm text-white/72 sm:grid-cols-2"><span className="flex items-center gap-2"><CalendarClock className="size-4" /> 30일 이상 미수금 {money(receivables.filter((c) => ageInDays(c.oldestDate) >= 30).reduce((s, c) => s + c.balance, 0))}</span><span className="flex items-center gap-2 sm:justify-end"><WalletCards className="size-4" /> 현재 대여 가스통 {totalCylinders}개</span></div></section>
       <section className="mt-4 grid grid-cols-3 gap-2.5"><QuickAction icon={<ArrowUpRight />} label="외상 추가" tone="credit" onClick={() => openTransaction('credit')} /><QuickAction icon={<ArrowDownLeft />} label="입금 처리" tone="payment" onClick={() => openTransaction('payment')} /><QuickAction icon={<Users />} label="고객 등록" tone="customer" onClick={() => { setReturnAfterCustomer(null); setDialog('customer'); }} /></section>
