@@ -120,7 +120,13 @@ export default function Home() {
         const created = saved.customers.find((customer: Customer) => customer.id === saved.actionResult?.id);
         if (created) { setSelected({ ...created, memo: created.memo || '', cylinderCount: Number(created.cylinderCount) || 0 }); setDialog(returnAfterCustomer); setReturnAfterCustomer(null); notify('고객을 등록하고 자동 선택했습니다.'); return; }
       }
-      notify(kind === 'customer' ? '고객을 저장했습니다.' : kind === 'credit' ? '외상을 저장했습니다.' : '입금을 저장했습니다.'); setDialog(null); return;
+      if (kind === 'credit' || kind === 'payment') {
+        const transactionId = saved.actionResult?.transaction_id;
+        const stored = transactionId && saved.transactions.some((transaction: Transaction) => transaction.id === transactionId);
+        if (!stored) { notify('거래 저장 결과를 확인하지 못했습니다. Apps Script를 새 버전으로 배포해 주세요.'); return; }
+        setQuery(''); setActiveTab('history'); setDialog(null); notify(kind === 'credit' ? '외상을 저장하고 거래내역에 표시했습니다.' : '입금을 저장하고 거래내역에 표시했습니다.'); return;
+      }
+      notify('고객을 저장했습니다.'); setDialog(null); return;
     }
     if (kind === 'customer') {
       const created: Customer = { id: `C${String(customers.length + 1).padStart(3, '0')}`, name: String(payload.name), phone: String(payload.phone || ''), memo: String(payload.memo || ''), balance: 0, oldestDate: null, cylinderCount: 0 };
@@ -131,7 +137,7 @@ export default function Home() {
       const customer = customers.find((c) => c.id === payload.customerId); if (!customer) return; const amount = Number(payload.amount); const date = String(payload.date);
       setTransactions((list) => [{ id: `T${Date.now()}`, customerId: customer.id, customerName: customer.name, type: kind, amount, date, memo: String(payload.memo || '') }, ...list]);
       setCustomers((list) => list.map((c) => c.id === customer.id ? { ...c, balance: Math.max(0, c.balance + (kind === 'credit' ? amount : -amount)), oldestDate: kind === 'credit' && !c.oldestDate ? date : c.oldestDate } : c));
-      notify(kind === 'credit' ? '외상을 추가했습니다.' : '입금을 처리했습니다.');
+      setQuery(''); setActiveTab('history'); notify(kind === 'credit' ? '외상을 추가하고 거래내역에 표시했습니다.' : '입금을 처리하고 거래내역에 표시했습니다.');
     } setDialog(null);
   }
   async function submitCylinder(event: React.FormEvent<HTMLFormElement>, kind: 'rental' | 'return') {
