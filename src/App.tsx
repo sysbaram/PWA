@@ -41,7 +41,11 @@ const money = (value: number) => new Intl.NumberFormat('ko-KR').format(value) + 
 const shortDate = (value: string) => new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(new Date(value));
 const yyyyMmDd = (value: string) => String(value).slice(0, 10);
 const ageInDays = (value: string | null) => value ? Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86400000)) : 0;
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+  const value = (type: 'year' | 'month' | 'day') => parts.find((part) => part.type === type)?.value || '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+};
 
 export default function Home() {
   const [customers, setCustomers] = useState(sampleCustomers);
