@@ -90,7 +90,7 @@ function addCylinderRental(data) {
 
 function getSummary() {
   const customerMap = {};
-  readRows(CUSTOMER_SHEET).forEach(row => customerMap[row.customer_id] = { id: String(row.customer_id), name: String(row.name), phone: String(row.phone || ''), balance: 0, oldestDate: null, cylinderCount: 0 });
+  readRows(CUSTOMER_SHEET).forEach(row => customerMap[row.customer_id] = { id: String(row.customer_id), name: String(row.name), phone: String(row.phone || ''), memo: String(row.memo || ''), balance: 0, oldestDate: null, cylinderCount: 0 });
   const transactions = readRows(TRANSACTION_SHEET).map(row => {
     const customer = customerMap[row.customer_id];
     const amount = Number(row.amount) || 0;
