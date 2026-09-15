@@ -47,14 +47,15 @@ function doPost(e) {
     authorize(body.key);
     lock.waitLock(10000);
     setupSheets();
-    if (body.action === 'addCustomer') addCustomer(body);
-    else if (body.action === 'addTransaction') addTransaction(body);
-    else if (body.action === 'addCylinderRental') addCylinderRental(body);
+    let actionResult = null;
+    if (body.action === 'addCustomer') actionResult = addCustomer(body);
+    else if (body.action === 'addTransaction') actionResult = addTransaction(body);
+    else if (body.action === 'addCylinderRental') actionResult = addCylinderRental(body);
     else if (body.action === 'deleteTransaction') deleteRecord(TRANSACTION_SHEET, 'transaction_id', clean(body.id), 'transaction');
     else if (body.action === 'deleteCylinderRental') deleteCylinderRental(clean(body.id));
     else throw new Error('지원하지 않는 요청입니다.');
     SpreadsheetApp.flush();
-    return jsonOutput({ ok: true, ...getSummary() });
+    return jsonOutput({ ok: true, actionResult, ...getSummary() });
   } catch (error) { return jsonOutput({ ok: false, error: error.message }); }
   finally { if (lock.hasLock()) lock.releaseLock(); }
 }
@@ -67,7 +68,9 @@ function authorize(candidate) {
 function addCustomer(data) {
   const name = clean(data.name);
   if (!name) throw new Error('고객명을 입력해 주세요.');
-  SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CUSTOMER_SHEET).appendRow([makeId('C'), name, clean(data.phone), clean(data.memo), createdAtSeoulDate()]);
+  const record = { id: makeId('C'), name, phone: clean(data.phone), memo: clean(data.memo), created_at: createdAtSeoulDate() };
+  SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CUSTOMER_SHEET).appendRow([record.id, record.name, record.phone, record.memo, record.created_at]);
+  return record;
 }
 
 function addTransaction(data) {
@@ -80,6 +83,7 @@ function addTransaction(data) {
   const record = { transaction_id: makeId('T'), customer_id: customerId, type, amount, date, memo: clean(data.memo), created_at: createdAtSeoulDate() };
   SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TRANSACTION_SHEET).appendRow([record.transaction_id, record.customer_id, record.type, record.amount, record.date, record.memo, record.created_at]);
   writeAudit('transaction', 'create', record.transaction_id, customerId, record);
+  return record;
 }
 
 function addCylinderRental(data) {
@@ -97,6 +101,7 @@ function addCylinderRental(data) {
   const record = { rental_id: makeId('R'), customer_id: customerId, type, quantity, cylinder_type: cylinderType, date, memo: clean(data.memo), created_at: createdAtSeoulDate() };
   SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CYLINDER_RENTAL_SHEET).appendRow([record.rental_id, record.customer_id, record.type, record.quantity, record.cylinder_type, record.date, record.memo, record.created_at]);
   writeAudit('cylinderRental', 'create', record.rental_id, customerId, record);
+  return record;
 }
 
 function deleteRecord(sheetName, idColumn, id, entity) {
