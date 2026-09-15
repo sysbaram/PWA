@@ -1,5 +1,6 @@
 const CUSTOMER_SHEET = 'Customers';
 const TRANSACTION_SHEET = 'Transactions';
+const CYLINDER_RENTAL_SHEET = 'CylinderRentals';
 
 function setup() {
   setupSheets();
@@ -13,13 +14,17 @@ function setupSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let customers = ss.getSheetByName(CUSTOMER_SHEET);
   let transactions = ss.getSheetByName(TRANSACTION_SHEET);
+  let cylinderRentals = ss.getSheetByName(CYLINDER_RENTAL_SHEET);
   if (!customers) customers = ss.insertSheet(CUSTOMER_SHEET);
   if (!transactions) transactions = ss.insertSheet(TRANSACTION_SHEET);
+  if (!cylinderRentals) cylinderRentals = ss.insertSheet(CYLINDER_RENTAL_SHEET);
   if (customers.getLastRow() === 0) customers.appendRow(['customer_id', 'name', 'phone', 'memo', 'created_at']);
   if (transactions.getLastRow() === 0) transactions.appendRow(['transaction_id', 'customer_id', 'type', 'amount', 'date', 'memo', 'created_at']);
-  customers.setFrozenRows(1); transactions.setFrozenRows(1);
+  if (cylinderRentals.getLastRow() === 0) cylinderRentals.appendRow(['rental_id', 'customer_id', 'type', 'quantity', 'cylinder_type', 'date', 'memo', 'created_at']);
+  customers.setFrozenRows(1); transactions.setFrozenRows(1); cylinderRentals.setFrozenRows(1);
   customers.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#e8efe9');
   transactions.getRange(1, 1, 1, 7).setFontWeight('bold').setBackground('#e8efe9');
+  cylinderRentals.getRange(1, 1, 1, 8).setFontWeight('bold').setBackground('#fff1d6');
 }
 
 function doGet(e) {
@@ -39,6 +44,7 @@ function doPost(e) {
     setupSheets();
     if (body.action === 'addCustomer') addCustomer(body);
     else if (body.action === 'addTransaction') addTransaction(body);
+    else if (body.action === 'addCylinderRental') addCylinderRental(body);
     else throw new Error('지원하지 않는 요청입니다.');
     SpreadsheetApp.flush();
     return jsonOutput({ ok: true });
@@ -67,9 +73,24 @@ function addTransaction(data) {
   SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TRANSACTION_SHEET).appendRow([makeId('T'), customerId, type, amount, date, clean(data.memo), new Date().toISOString()]);
 }
 
+function addCylinderRental(data) {
+  const customerId = clean(data.customerId);
+  const type = data.type === 'return' ? 'return' : 'rental';
+  const quantity = Number(data.quantity);
+  const cylinderType = clean(data.cylinderType);
+  const date = clean(data.date);
+  if (!customerId || !Number.isInteger(quantity) || quantity <= 0 || !cylinderType || !date) throw new Error('고객, 가스통 규격, 수량, 날짜를 확인해 주세요.');
+  if (!readRows(CUSTOMER_SHEET).some(row => String(row.customer_id) === customerId)) throw new Error('고객을 찾을 수 없습니다.');
+  if (type === 'return') {
+    const rented = readRows(CYLINDER_RENTAL_SHEET).filter(row => String(row.customer_id) === customerId && String(row.cylinder_type) === cylinderType).reduce((sum, row) => sum + (row.type === 'return' ? -Number(row.quantity || 0) : Number(row.quantity || 0)), 0);
+    if (quantity > rented) throw new Error('해당 규격의 현재 대여 수량보다 많이 반납할 수 없습니다.');
+  }
+  SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CYLINDER_RENTAL_SHEET).appendRow([makeId('R'), customerId, type, quantity, cylinderType, date, clean(data.memo), new Date().toISOString()]);
+}
+
 function getSummary() {
   const customerMap = {};
-  readRows(CUSTOMER_SHEET).forEach(row => customerMap[row.customer_id] = { id: String(row.customer_id), name: String(row.name), phone: String(row.phone || ''), balance: 0, oldestDate: null });
+  readRows(CUSTOMER_SHEET).forEach(row => customerMap[row.customer_id] = { id: String(row.customer_id), name: String(row.name), phone: String(row.phone || ''), balance: 0, oldestDate: null, cylinderCount: 0 });
   const transactions = readRows(TRANSACTION_SHEET).map(row => {
     const customer = customerMap[row.customer_id];
     const amount = Number(row.amount) || 0;
@@ -80,8 +101,15 @@ function getSummary() {
     }
     return { id: String(row.transaction_id), customerId: String(row.customer_id), customerName: customer ? customer.name : '삭제된 고객', type: row.type, amount, date, memo: String(row.memo || '') };
   }).sort((a, b) => b.date.localeCompare(a.date));
+  const cylinderRentals = readRows(CYLINDER_RENTAL_SHEET).map(row => {
+    const customer = customerMap[row.customer_id];
+    const quantity = Number(row.quantity) || 0;
+    const type = row.type === 'return' ? 'return' : 'rental';
+    if (customer) customer.cylinderCount += type === 'return' ? -quantity : quantity;
+    return { id: String(row.rental_id), customerId: String(row.customer_id), customerName: customer ? customer.name : '삭제된 고객', type, quantity, cylinderType: String(row.cylinder_type || ''), date: normalizeDate(row.date), memo: String(row.memo || '') };
+  }).sort((a, b) => b.date.localeCompare(a.date));
   const customers = Object.values(customerMap).map(customer => ({ ...customer, balance: Math.max(0, customer.balance), oldestDate: customer.balance > 0 ? customer.oldestDate : null }));
-  return { customers, transactions };
+  return { customers, transactions, cylinderRentals };
 }
 
 function readRows(sheetName) {
